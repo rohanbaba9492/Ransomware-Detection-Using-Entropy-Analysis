@@ -1,7 +1,3 @@
-Here’s a well-structured **README.md** template for your GitHub repository for the **Ransomware Detection Using Entropy Analysis** project:
-
----
-
 # Ransomware Detection Using Entropy Analysis in Volatility Framework
 
 ### **Overview**
