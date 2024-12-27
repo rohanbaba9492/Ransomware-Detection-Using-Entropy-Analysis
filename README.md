@@ -89,7 +89,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - **LinkedIn**: [Rohan-Baba-Shaik](https://www.linkedin.com/in/rohan-baba-shaik-49353b207/)  
 
 Feel free to use and modify this plugin to enhance your memory forensics workflows!
-
----
-
-Let me know if you’d like any additional sections or modifications!
