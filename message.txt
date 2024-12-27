@@ -1,0 +1,101 @@
+import volatility.plugins.common as common
+import volatility.utils as utils
+import volatility.win32 as win32
+import math
+import re
+
+class MyPlugin(common.AbstractWindowsCommand):
+    """My Plugin for detecting cryptographic functions and ransomware patterns using entropy analysis."""
+
+    def get_requirements(self):
+        return [
+            # Requirement: Address space to scan
+            common.ModuleRequirement(name="kernel", description="Kernel module", architectures=["Intel32", "Intel64"]),
+        ]
+
+    def entropy(self, data):
+        """Calculate entropy of a data region."""
+        if not data:
+            return 0
+        entropy = 0
+        data_length = len(data)
+        for byte in range(256):
+            p_x = float(data.count(chr(byte))) / data_length
+            if p_x > 0:
+                entropy += - p_x * math.log2(p_x)
+        return entropy
+
+    def calculate(self):
+        """Plugin entry point. Collect and analyze memory regions for ransomware patterns and entropy."""
+        addr_space = utils.load_as(self._config)
+        tasks = win32.tasks.pslist(addr_space)
+
+        ransomware_patterns = [re.compile(r'\.bomber\b'), re.compile(r'\.bomberman\b'), re.compile(r'\@WanaDecryptor@'), re.compile(r'\.WNCRY\b'), re.compile(r'WannaCry'), re.compile(r'WCRY'), b"HOW TO RECOVER ENCRYPTED FILES.TXT", b"DECRYPT_INSTRUCTIONS.txt", b"!!!_READ_ME_!!!", b"Ransomware", b"gardengarden@cock.li", b"dataprotection@tuta.io", b"serverrecoveryhelp@gmail.com", b"recoverydata54@protonmail.com", b"All your files have been encrypted", b"Bitcoin"]
+
+        results = {
+            "suspicious_patterns": [],
+            "high_entropy_regions": [],
+            "total_processes_scanned": 0,
+            "total_high_entropy": 0
+        }
+
+        for task in tasks:
+            process_space = task.get_process_address_space()
+            if not process_space:
+                continue
+
+            results["total_processes_scanned"] += 1
+            print("Scanning Process: {} {}".format(task.ImageFileName, task.UniqueProcessId))
+            # Check memory regions (VAD root)
+            for vad in task.VadRoot.traverse():
+                try:
+                    mem_data = process_space.read(vad.Start, vad.Length)
+
+                    # Check for ransomware patterns
+                    for pattern in ransomware_patterns:
+                        if pattern.search(mem_data):
+                            results["suspicious_patterns"].append("Suspicious File extension found in process {}: {}".format(task.UniqueProcessId, task.ImageFileName))
+
+
+                    # Check entropy in mem
+                    region_entropy = self.entropy(mem_data)
+                    if region_entropy > 7.5:
+                        results["high_entropy_regions"].append("High entropy detected in process {} memory region: {} - {}".format(task.UniqueProcessId, vad.Start, vad.Length))
+                        results["total_high_entropy"] += 1
+                
+                except Exception as e:
+                    continue  
+
+        return results
+
+    def render_text(self, outfd, data):
+        """Render the results in the text format."""
+        if data:
+            
+            outfd.write("Ransomware and Cryptographic Analysis Report\n")
+            outfd.write("==========================================\n")
+            outfd.write("Total Processes Scanned: {}\n".format(data['total_processes_scanned']))
+            outfd.write("Total High-Entropy Memory Regions Found: {}\n\n".format(data['total_high_entropy']))
+
+            outfd.write("Suspicious Ransomware Patterns Found:\n")
+            if data["suspicious_patterns"]:
+                for result in data["suspicious_patterns"]:
+                    outfd.write("- {}\n".format(result))
+            else:
+                outfd.write("No suspicious ransomware patterns detected.\n")
+
+            outfd.write("\nHigh Entropy Regions Detected:\n")
+            if data["high_entropy_regions"]:
+                for result in data["high_entropy_regions"]:
+                    outfd.write("- {}\n".format(result))
+            else:
+                outfd.write("No high entropy regions detected.\n")
+
+            outfd.write("\nSuggested Plugins for Further Investigation:\n")
+            outfd.write("- `dlllist`: To check for suspicious DLLs loaded in processes\n")
+            outfd.write("- `handles`: To identify handles that might be associated with suspicious activities\n")
+            outfd.write("- `pslist`: To get a list of active processes and their state\n")
+            outfd.write("- `cmdscan` or `consoles`: To check for any suspicious command-line activity\n")
+
+        else:
+            outfd.write("No suspicious activity detected.\n")
